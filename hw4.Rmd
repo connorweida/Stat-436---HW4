@@ -1,0 +1,116 @@
+---
+title: "hw4"
+author: "Connor Weida"
+date: "2023-04-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(readr)
+library(dplyr)
+library(tidyverse)
+library(shiny)
+library(caret)
+library(DALEX)
+library(patchwork)
+library(ggcorrplot)
+library(FactoMineR)
+library(corrr)
+library(factoextra)
+theme_set(theme_bw())
+```
+
+```{r}
+final_pitches = read.csv("https://github.com/connorweida/Stat436-HW2/raw/main/final_pitches.csv")
+```
+```{r}
+head(final_pitches)
+dim(final_pitches)
+```
+```{r}
+# cut down final_pitches even further
+
+set.seed(100)
+n = round(dim(final_pitches)[1] * .2)
+real_final_pitches <- sample_n(final_pitches, n) # change n to change sample size
+
+# add a column to say if it is a fastball or not
+
+real_final_pitches$fastball = ifelse((real_final_pitches$pitch_type == "FF") | (real_final_pitches$pitch_type == "FT"), 1, 0)
+head(real_final_pitches)
+```
+
+```{r}
+x <- real_final_pitches %>%
+  select(b_count:outs, fastball) %>%
+  mutate(across(where(is.character), as.factor)) # gbm needs chr -> factor
+
+y <- real_final_pitches$fastball
+
+head(x)
+```
+
+```{r}
+# logistic regression
+
+model = glm(fastball ~ ., family = binomial(), data = x)
+summary(model)
+```
+```{r}
+x$pred.prob <- model$fitted.values
+model$coefficients
+```
+
+```{r}
+f1 <- ggplot(x) +
+  geom_point(aes(b_count, pred.prob)) +
+  scale_x_continuous(breaks = c(0, 1, 2, 3)) +
+  ggtitle("Fastball by Balls") + 
+  xlab("Ball Count") +
+  ylab("Predicted Probability")
+
+f2 <- ggplot(x) +
+  geom_point(aes(s_count, pred.prob)) +
+  scale_x_continuous(breaks = c(0, 1, 2)) +
+  ggtitle("Fastball by Strikes") + 
+  xlab("Strike Count") +
+  ylab("Predicted Probability")
+
+f3 <- ggplot(x) +
+  geom_point(aes(outs, pred.prob)) +
+  scale_x_continuous(breaks = c(0, 1, 2)) +
+  ggtitle("Fastball by Outs") + 
+  xlab("Out Count") +
+  ylab("Predicted Probability")
+
+f1 + f2 + f3
+```
+```{r}
+# PCA
+
+x <- real_final_pitches %>%
+  select(start_speed:break_length) %>%
+  mutate(across(where(is.character), as.factor))
+
+head(x)
+```
+```{r}
+x_norm = scale(x)
+head(x_norm)
+```
+```{r}
+corr_matrix <- cor(x_norm)
+p1 <- ggcorrplot(corr_matrix)
+
+data.pca <- princomp(corr_matrix)
+p2 <- fviz_eig(data.pca, addlabels = TRUE)
+
+p1 + p2
+```
+```{r}
+summary(data.pca)
+```
